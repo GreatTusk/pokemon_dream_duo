@@ -13,10 +13,10 @@
 ============================================================
 """
 
+import asyncio
+import aiohttp
 import requests
-import json
 import re
-import time
 import csv
 import os
 from collections import defaultdict
@@ -51,8 +51,11 @@ CONFIG = {
     # Output CSV filename
     "output_csv": "pokemon_dream_duos_gen9ou_1800elo.csv",
 
-    # Request delay in seconds (be polite to the API)
-    "request_delay": 0.5,
+    # Max concurrent replay log fetches
+    "max_concurrent_replay_logs": 12,
+
+    # Optional request delay in seconds (0 disables per-request delay)
+    "request_delay": 0.0,
 }
 
 # ─────────────────────────────────────────────
@@ -126,7 +129,9 @@ def extract_teammate_pairs_from_smogon(chaos_data: dict) -> Dict[Tuple[str, str]
 #  SHOWDOWN REPLAY SOURCE
 # ─────────────────────────────────────────────
 
-def fetch_replay_list(format_id: str, page: int = 1) -> List[dict]:
+async def fetch_replay_list(
+    session: aiohttp.ClientSession, format_id: str, page: int = 1
+) -> List[dict]:
     """
     Query the Showdown replay search API for a specific format.
     Returns a list of replay metadata dicts.
@@ -136,15 +141,21 @@ def fetch_replay_list(format_id: str, page: int = 1) -> List[dict]:
     url = CONFIG["replay_search_url"]
     params = {"format": format_id, "page": page}
     try:
-        resp = requests.get(url, params=params, timeout=15)
-        resp.raise_for_status()
-        return resp.json() if isinstance(resp.json(), list) else []
+        async with session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+            resp.raise_for_status()
+            data = await resp.json()
+            return data if isinstance(data, list) else []
     except Exception as e:
         print(f"[Replay API] Error fetching page {page}: {e}")
         return []
 
 
-def fetch_replay_log(replay_id: str) -> Optional[str]:
+async def fetch_replay_log(
+    session: aiohttp.ClientSession,
+    replay_id: str,
+    semaphore: asyncio.Semaphore,
+    request_delay: float = 0.0,
+) -> Optional[str]:
     """
     Download the full battle log for a given replay ID.
     Replay logs are available at:
@@ -152,12 +163,41 @@ def fetch_replay_log(replay_id: str) -> Optional[str]:
     """
     url = f"https://replay.pokemonshowdown.com/{replay_id}.log"
     try:
-        resp = requests.get(url, timeout=15)
-        resp.raise_for_status()
-        return resp.text
+        async with semaphore:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                resp.raise_for_status()
+                text = await resp.text()
+            if request_delay > 0:
+                await asyncio.sleep(request_delay)
+            return text
     except Exception as e:
         print(f"[Replay API] Could not fetch log {replay_id}: {e}")
         return None
+
+
+async def _fetch_replay_pages(session: aiohttp.ClientSession) -> List[dict]:
+    all_replays = []
+    for page in range(1, CONFIG["replay_pages"] + 1):
+        replay_list = await fetch_replay_list(session, CONFIG["format"], page=page)
+        if not replay_list:
+            print(f"[Replay API] Page {page}: no results, stopping.")
+            break
+        print(f"[Replay API] Page {page}: {len(replay_list)} replays found.")
+        all_replays.extend(replay_list)
+    return all_replays
+
+
+async def _fetch_and_parse_replay(
+    session: aiohttp.ClientSession,
+    meta: dict,
+    semaphore: asyncio.Semaphore,
+    request_delay: float,
+) -> Optional[dict]:
+    replay_id = meta.get("id", "")
+    if not replay_id:
+        return None
+    log = await fetch_replay_log(session, replay_id, semaphore, request_delay)
+    return parse_replay_log(log, meta)
 
 
 def parse_replay_log(log: str, replay_meta: dict) -> Optional[dict]:
@@ -368,9 +408,9 @@ def export_csv(results: List[dict], filepath: str):
 #  MAIN PIPELINE
 # ─────────────────────────────────────────────
 
-def main():
+async def run_pipeline():
     print("\n" + "="*55)
-    print("  Gen 9 OU Dream Duos Pipeline  |  Elo >= 1800")
+    print(f"  Gen 9 OU Dream Duos Pipeline  |  Elo >= {CONFIG['min_elo']}")
     print("="*55 + "\n")
 
     engine = DreamDuosEngine()
@@ -388,23 +428,26 @@ def main():
     # ── SOURCE 2: Live Showdown Replay API ────────────────
     print(f">>> SOURCE 2: Showdown Replay API ({CONFIG['replay_pages']} pages)\n")
     total_fetched = 0
-    for page in range(1, CONFIG["replay_pages"] + 1):
-        replay_list = fetch_replay_list(CONFIG["format"], page=page)
-        if not replay_list:
-            print(f"[Replay API] Page {page}: no results, stopping.")
-            break
-
-        print(f"[Replay API] Page {page}: {len(replay_list)} replays found.")
-        for meta in replay_list:
-            replay_id = meta.get("id", "")
-            if not replay_id:
-                continue
-            log = fetch_replay_log(replay_id)
-            parsed = parse_replay_log(log, meta)
-            if parsed:
-                engine.ingest_replay(parsed, min_elo=CONFIG["min_elo"])
-                total_fetched += 1
-            time.sleep(CONFIG["request_delay"])
+    timeout = aiohttp.ClientTimeout(total=20)
+    connector = aiohttp.TCPConnector(limit=CONFIG["max_concurrent_replay_logs"])
+    async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+        replay_list = await _fetch_replay_pages(session)
+        if replay_list:
+            semaphore = asyncio.Semaphore(CONFIG["max_concurrent_replay_logs"])
+            tasks = [
+                _fetch_and_parse_replay(
+                    session,
+                    meta,
+                    semaphore,
+                    CONFIG["request_delay"],
+                )
+                for meta in replay_list
+            ]
+            results = await asyncio.gather(*tasks)
+            for parsed in results:
+                if parsed:
+                    engine.ingest_replay(parsed, min_elo=CONFIG["min_elo"])
+                    total_fetched += 1
 
     print(f"\n[Replay API] Total replays fetched and parsed: {total_fetched}")
 
@@ -430,6 +473,10 @@ def main():
     # ── EXPORT ────────────────────────────────────────────
     export_csv(dream_duos, CONFIG["output_csv"])
     print("\n[Done] Pipeline complete.")
+
+
+def main():
+    asyncio.run(run_pipeline())
 
 
 if __name__ == "__main__":
