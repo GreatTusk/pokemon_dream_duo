@@ -120,14 +120,15 @@ ORDER BY month, format_id, elo_tier, usage_pct DESC;
 -- V8: Replay win rates by Pokemon
 CREATE OR REPLACE VIEW smogon_dw.v_replay_winrates AS
 SELECT
+  rp.format_id,
+  rp.month,
   rt.pokemon,
-  rt.format_id,
-  rt.month,
   COUNT(*) AS total_games,
   SUM(rt.won) AS wins,
   ROUND(SAFE_DIVIDE(SUM(rt.won), COUNT(*)) * 100, 2) AS win_rate_pct
 FROM smogon_dw.fact_replay_teams rt
-GROUP BY rt.pokemon, rt.format_id, rt.month
+JOIN smogon_dw.fact_replays rp ON rt.replay_id = rp.replay_id
+GROUP BY rp.format_id, rp.month, rt.pokemon
 ORDER BY total_games DESC;
 
 -- V9: Format comparison overview
