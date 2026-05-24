@@ -20,8 +20,8 @@ gcloud composer environments create "$COMPOSER_ENV" \
   --image-version="composer-2-airflow-2" \
   --node-count=3 \
   --machine-type="n1-standard-4" \
-  --disk-size-gb=50 \
-  --environment-variables="PROJECT_ID=${PROJECT_ID},RAW_BUCKET=smogon-raw-${PROJECT_ID},DAGS_BUCKET=smogon-dags-${PROJECT_ID}" \
+  --disk-size=50 \
+  --env-variables="PROJECT_ID=${PROJECT_ID},RAW_BUCKET=smogon-raw-${PROJECT_ID},DAGS_BUCKET=smogon-dags-${PROJECT_ID}" \
   --network="default" \
   --subnetwork="default"
 
