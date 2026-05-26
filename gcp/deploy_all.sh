@@ -86,7 +86,7 @@ gcloud services enable \
 ok "APIs enabled."
 
 info "Waiting 90s for service agents to initialize..."
-sleep 90
+sleep 30
 
 # ─── STEP 3: Private Google Access ───────────────────────────────────────────
 info "Step 3 — Checking Private Google Access on default subnet..."
