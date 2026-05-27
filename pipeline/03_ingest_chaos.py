@@ -1,9 +1,10 @@
-import re
-import logging
-import json
-import requests
-import gzip
 import argparse
+import gzip
+import json
+import logging
+import re
+
+import requests
 from tqdm import tqdm
 
 from .config import SMOGON_BASE, DATA_DIR, BATCH_SIZE
@@ -102,18 +103,26 @@ def process_chaos_data(data, month, format_id, elo_tier, conn):
                     p1, p2 = sorted([poke_name, key])
                     batch_teammates.append((month, format_id, elo_tier, p1, p2, score))
     inserts = [
-        (batch_details, "INSERT OR REPLACE INTO pokemon_details (month, format_id, elo_tier, pokemon, raw_count, avg_weight, viability_ceiling) VALUES (?,?,?,?,?,?,?)"),
-        (batch_abilities, "INSERT OR REPLACE INTO abilities (month, format_id, elo_tier, pokemon, ability, usage_pct) VALUES (?,?,?,?,?,?)"),
-        (batch_items, "INSERT OR REPLACE INTO items (month, format_id, elo_tier, pokemon, item, usage_pct) VALUES (?,?,?,?,?,?)"),
-        (batch_moves, "INSERT OR REPLACE INTO moves (month, format_id, elo_tier, pokemon, move, usage_pct) VALUES (?,?,?,?,?,?)"),
-        (batch_spreads, "INSERT OR REPLACE INTO spreads (month, format_id, elo_tier, pokemon, nature, hp, atk, def, spa, spd, spe, spread_str, usage_pct) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"),
-        (batch_tera, "INSERT OR REPLACE INTO tera_types (month, format_id, elo_tier, pokemon, tera_type, usage_pct) VALUES (?,?,?,?,?,?)"),
-        (batch_teammates, "INSERT OR REPLACE INTO teammates (month, format_id, elo_tier, pokemon1, pokemon2, usage_pct) VALUES (?,?,?,?,?,?)"),
-        (batch_checks, "INSERT OR REPLACE INTO checks_counters (month, format_id, elo_tier, pokemon, counter_pokemon, score, ko_pct, switch_pct) VALUES (?,?,?,?,?,?,?,?)"),
+        (batch_details,
+         "INSERT OR REPLACE INTO pokemon_details (month, format_id, elo_tier, pokemon, raw_count, avg_weight, viability_ceiling) VALUES (?,?,?,?,?,?,?)"),
+        (batch_abilities,
+         "INSERT OR REPLACE INTO abilities (month, format_id, elo_tier, pokemon, ability, usage_pct) VALUES (?,?,?,?,?,?)"),
+        (batch_items,
+         "INSERT OR REPLACE INTO items (month, format_id, elo_tier, pokemon, item, usage_pct) VALUES (?,?,?,?,?,?)"),
+        (batch_moves,
+         "INSERT OR REPLACE INTO moves (month, format_id, elo_tier, pokemon, move, usage_pct) VALUES (?,?,?,?,?,?)"),
+        (batch_spreads,
+         "INSERT OR REPLACE INTO spreads (month, format_id, elo_tier, pokemon, nature, hp, atk, def, spa, spd, spe, spread_str, usage_pct) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"),
+        (batch_tera,
+         "INSERT OR REPLACE INTO tera_types (month, format_id, elo_tier, pokemon, tera_type, usage_pct) VALUES (?,?,?,?,?,?)"),
+        (batch_teammates,
+         "INSERT OR REPLACE INTO teammates (month, format_id, elo_tier, pokemon1, pokemon2, usage_pct) VALUES (?,?,?,?,?,?)"),
+        (batch_checks,
+         "INSERT OR REPLACE INTO checks_counters (month, format_id, elo_tier, pokemon, counter_pokemon, score, ko_pct, switch_pct) VALUES (?,?,?,?,?,?,?,?)"),
     ]
     for batch, sql in inserts:
         for i in range(0, len(batch), BATCH_SIZE):
-            conn.executemany(sql, batch[i : i + BATCH_SIZE])
+            conn.executemany(sql, batch[i: i + BATCH_SIZE])
 
 
 def run(format_filter=None):
@@ -130,7 +139,8 @@ def run(format_filter=None):
         existing = set()
         for r in conn.execute("SELECT DISTINCT month, format_id, elo_tier FROM pokemon_details"):
             existing.add((r["month"], r["format_id"], r["elo_tier"]))
-    todo = [(r["month"], r["format_id"], r["elo_tier"]) for r in rows if (r["month"], r["format_id"], r["elo_tier"]) not in existing]
+    todo = [(r["month"], r["format_id"], r["elo_tier"]) for r in rows if
+            (r["month"], r["format_id"], r["elo_tier"]) not in existing]
     if not todo:
         logger.info("All chaos data already ingested")
         return

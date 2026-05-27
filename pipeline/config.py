@@ -1,6 +1,4 @@
 from pathlib import Path
-import os
-
 
 DB_PATH = Path(__file__).resolve().parent.parent / "pokemon_stats.db"
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"

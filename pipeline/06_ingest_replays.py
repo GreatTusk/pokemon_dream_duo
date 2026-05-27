@@ -1,10 +1,10 @@
+import argparse
 import asyncio
 import logging
 import re
-import aiohttp
-import argparse
-from tqdm import tqdm
 from datetime import datetime
+
+import aiohttp
 
 from .config import REPLAY_SEARCH_URL, REPLAY_BASE, MAX_CONCURRENT_LOGS, REPLAY_PAGES, MIN_ELO_REPLAY, BATCH_SIZE
 from .db import get_conn
@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 async def fetch_replay_list(session, format_id, page):
     try:
-        async with session.get(REPLAY_SEARCH_URL, params={"format": format_id, "page": page}, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+        async with session.get(REPLAY_SEARCH_URL, params={"format": format_id, "page": page},
+                               timeout=aiohttp.ClientTimeout(total=15)) as resp:
             resp.raise_for_status()
             data = await resp.json()
             return data if isinstance(data, list) else []
@@ -91,7 +92,8 @@ async def _run_async(format_id, pages=REPLAY_PAGES):
             logger.info("No replays found for %s", format_id)
             return
         good = [m for m in all_replays if (m.get("rating", 0) or 0) >= MIN_ELO_REPLAY and m.get("id")]
-        logger.info("Fetched %d replays for %s, filtered to %d with Elo >= %d", len(all_replays), format_id, len(good), MIN_ELO_REPLAY)
+        logger.info("Fetched %d replays for %s, filtered to %d with Elo >= %d", len(all_replays), format_id, len(good),
+                    MIN_ELO_REPLAY)
         tasks = [fetch_and_parse(session, meta, semaphore) for meta in good]
         results = await asyncio.gather(*tasks)
         with get_conn() as conn:
@@ -113,18 +115,24 @@ async def _run_async(format_id, pages=REPLAY_PAGES):
                     for poke in team:
                         tbatch.append((rid, side_name, poke, won))
             for i in range(0, len(rbatch), BATCH_SIZE):
-                conn.executemany("INSERT OR REPLACE INTO replays (replay_id, format_id, rating, player1, player2, uploadtime, month) VALUES (?,?,?,?,?,?,?)", rbatch[i:i+BATCH_SIZE])
+                conn.executemany(
+                    "INSERT OR REPLACE INTO replays (replay_id, format_id, rating, player1, player2, uploadtime, month) VALUES (?,?,?,?,?,?,?)",
+                    rbatch[i:i + BATCH_SIZE])
             for i in range(0, len(tbatch), BATCH_SIZE):
-                conn.executemany("INSERT OR REPLACE INTO replay_teams (replay_id, side, pokemon, won) VALUES (?,?,?,?)", tbatch[i:i+BATCH_SIZE])
+                conn.executemany("INSERT OR REPLACE INTO replay_teams (replay_id, side, pokemon, won) VALUES (?,?,?,?)",
+                                 tbatch[i:i + BATCH_SIZE])
         logger.info("Ingested %d replays with %d team entries for %s", len(rbatch), len(tbatch), format_id)
 
 
 def run(format_filter=None, pages=REPLAY_PAGES):
     with get_conn() as conn:
         if format_filter:
-            rows = conn.execute("SELECT DISTINCT format_id FROM discovered_sources WHERE source_type = 'usage' AND format_id = ?", (format_filter,)).fetchall()
+            rows = conn.execute(
+                "SELECT DISTINCT format_id FROM discovered_sources WHERE source_type = 'usage' AND format_id = ?",
+                (format_filter,)).fetchall()
         else:
-            rows = conn.execute("SELECT DISTINCT format_id FROM discovered_sources WHERE source_type = 'usage'").fetchall()
+            rows = conn.execute(
+                "SELECT DISTINCT format_id FROM discovered_sources WHERE source_type = 'usage'").fetchall()
     formats = [r["format_id"] for r in rows]
     for fmt in formats:
         asyncio.run(_run_async(fmt, pages=pages))

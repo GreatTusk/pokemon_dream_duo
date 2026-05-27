@@ -57,6 +57,10 @@ class StorageClient:
     def list_blobs(self, prefix):
         return list(self.client.list_blobs(self._bucket, prefix=prefix))
 
+    def list_raw_blobs(self, source_type):
+        prefix = f"{self.raw_prefix}/{source_type}"
+        return list(self.client.list_blobs(self._bucket, prefix=prefix))
+
     def cache_path(self, source_type, month, format_id, elo_tier, ext):
         return f"{self.raw_prefix}/{source_type}/{month}/{format_id}-{elo_tier}.{ext}"
 

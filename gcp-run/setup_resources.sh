@@ -118,14 +118,14 @@ else
         --memory=4Gi --cpu=2 --task-timeout=3600
 fi
 
-# 11. Execute the job
-echo ">>> Executing Cloud Run job with format=${FORMAT}..."
-gcloud run jobs execute "${JOB_NAME}" \
-    --region="${REGION}" \
-    --args="--format=${FORMAT}"
+## 11. Execute the job
+#echo ">>> Executing Cloud Run job with format=${FORMAT}..."
+#gcloud run jobs execute "${JOB_NAME}" \
+#    --region="${REGION}" \
+#    --args="--format=${FORMAT}"
 
-echo ""
-echo "============================================"
-echo "  ALL DONE - Pipeline running in Cloud Run! "
-echo "============================================"
-echo "Watch logs: gcloud run jobs executions list --job=${JOB_NAME} --region=${REGION}"
+#echo ""
+#echo "============================================"
+#echo "  ALL DONE - Pipeline running in Cloud Run! "
+#echo "============================================"
+#echo "Watch logs: gcloud run jobs executions list --job=${JOB_NAME} --region=${REGION}"

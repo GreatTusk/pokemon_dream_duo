@@ -1,7 +1,8 @@
-import re
-import logging
-import requests
 import argparse
+import logging
+import re
+
+import requests
 from tqdm import tqdm
 
 from .config import SMOGON_BASE, DATA_DIR, BATCH_SIZE
@@ -98,7 +99,8 @@ def run(format_filter=None):
         existing = set()
         for r in conn.execute("SELECT DISTINCT month, format_id, elo_tier FROM usage_stats"):
             existing.add((r["month"], r["format_id"], r["elo_tier"]))
-    todo = [(r["month"], r["format_id"], r["elo_tier"]) for r in rows if (r["month"], r["format_id"], r["elo_tier"]) not in existing]
+    todo = [(r["month"], r["format_id"], r["elo_tier"]) for r in rows if
+            (r["month"], r["format_id"], r["elo_tier"]) not in existing]
     if not todo:
         logger.info("All usage data already ingested")
         return

@@ -1,11 +1,9 @@
 import re
 import logging
-import requests
 import argparse
-import gzip
 from tqdm import tqdm
 
-from .config import SMOGON_BASE, FLUSH_THRESHOLD
+from .config import FLUSH_THRESHOLD
 from .warehouse_client import WarehouseClient
 from .storage_client import StorageClient
 from .db import SCHEMA_MAP, TABLE_USAGE_STATS, TABLE_DISCOVERED_SOURCES
@@ -13,25 +11,12 @@ from .db import SCHEMA_MAP, TABLE_USAGE_STATS, TABLE_DISCOVERED_SOURCES
 logger = logging.getLogger(__name__)
 
 
-def fetch_usage_text(storage, month, format_id, elo_tier):
+def load_usage_text(storage, month, format_id, elo_tier):
     cache_name = storage.cache_path("usage", month, format_id, elo_tier, "txt")
     if storage.exists(cache_name):
         logger.debug("Cache hit: gs://%s/%s", storage.bucket_name, cache_name)
         return storage.download_text(cache_name)
-    for ext in [".txt", ".txt.gz"]:
-        url = f"{SMOGON_BASE}/{month}/{format_id}-{elo_tier}{ext}"
-        try:
-            resp = requests.get(url, timeout=30)
-            if resp.status_code == 200:
-                raw = resp.content
-                if ext == ".txt.gz":
-                    text = gzip.decompress(raw).decode("utf-8")
-                else:
-                    text = raw.decode("utf-8")
-                storage.upload_text(text, cache_name)
-                return text
-        except requests.RequestException:
-            continue
+    logger.debug("Not found in GCS: gs://%s/%s", storage.bucket_name, cache_name)
     return None
 
 
@@ -105,7 +90,7 @@ def run(format_filter=None):
     logger.info("Ingesting %d usage stats files", len(todo))
     accum = []
     for month, fmt, elo in tqdm(todo, desc="Usage stats"):
-        text = fetch_usage_text(storage, month, fmt, elo)
+        text = load_usage_text(storage, month, fmt, elo)
         if not text:
             logger.warning("No data for %s %s-%d", month, fmt, elo)
             continue

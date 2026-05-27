@@ -66,7 +66,4 @@ PROJECT_ID = os.environ.get("PROJECT_ID", "")
 REGION = os.environ.get("REGION", "us-central1")
 BUCKET_NAME = os.environ.get("BUCKET_NAME", "")
 BQ_DATASET = os.environ.get("BQ_DATASET", "smogon_etl")
-RUN_ID = os.environ.get("RUN_ID", "")
-if not RUN_ID:
-    from datetime import datetime
-    RUN_ID = datetime.utcnow().strftime("run_%Y%m%d_%H%M%S")
+RUN_ID = os.environ.get("RUN_ID", "manual_uploads")

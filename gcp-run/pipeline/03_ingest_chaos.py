@@ -1,12 +1,10 @@
 import re
 import logging
 import json
-import requests
-import gzip
 import argparse
 from tqdm import tqdm
 
-from .config import SMOGON_BASE, FLUSH_THRESHOLD
+from .config import FLUSH_THRESHOLD
 from .warehouse_client import WarehouseClient
 from .storage_client import StorageClient
 from .db import (
@@ -23,23 +21,13 @@ CHAOS_TABLES = [
 logger = logging.getLogger(__name__)
 
 
-def fetch_chaos_json(storage, month, format_id, elo_tier):
+def load_chaos_json(storage, month, format_id, elo_tier):
     cache_name = storage.cache_path("chaos", month, format_id, elo_tier, "json")
     if storage.exists(cache_name):
         logger.debug("Cache hit: gs://%s/%s", storage.bucket_name, cache_name)
         raw = storage.download_bytes(cache_name)
         return json.loads(raw)
-    for url_ext in [".json", ".json.gz"]:
-        url = f"{SMOGON_BASE}/{month}/chaos/{format_id}-{elo_tier}{url_ext}"
-        try:
-            resp = requests.get(url, timeout=120)
-            if resp.status_code == 200:
-                raw = resp.content
-                data = json.loads(gzip.decompress(raw) if url_ext == ".json.gz" else raw)
-                storage.upload_bytes(json.dumps(data, default=str).encode("utf-8"), cache_name, content_type="application/json")
-                return data
-        except requests.RequestException:
-            continue
+    logger.debug("Not found in GCS: gs://%s/%s", storage.bucket_name, cache_name)
     return None
 
 
@@ -146,7 +134,7 @@ def run(format_filter=None):
 
     accum = {tname: [] for tname in CHAOS_TABLES}
     for month, fmt, elo in tqdm(todo, desc="Chaos JSON"):
-        data = fetch_chaos_json(storage, month, fmt, elo)
+        data = load_chaos_json(storage, month, fmt, elo)
         if not data:
             logger.warning("No chaos data for %s %s-%d", month, fmt, elo)
             continue

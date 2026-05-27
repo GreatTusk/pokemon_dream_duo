@@ -3,7 +3,6 @@ import importlib
 import logging
 import time
 
-from . import config
 from .db import get_conn, init_db
 
 logger = logging.getLogger(__name__)
@@ -62,5 +61,6 @@ if __name__ == "__main__":
     parser.add_argument("--format", help="Process only this format (e.g., gen9ou)")
     parser.add_argument("--skip-discover", action="store_true", help="Skip discovery step")
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s", datefmt="%H:%M:%S")
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+                        datefmt="%H:%M:%S")
     run(format_filter=args.format, skip_discover=args.skip_discover)

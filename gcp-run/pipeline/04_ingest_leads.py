@@ -1,11 +1,9 @@
 import re
 import logging
-import requests
-import gzip
 import argparse
 from tqdm import tqdm
 
-from .config import SMOGON_BASE, FLUSH_THRESHOLD
+from .config import FLUSH_THRESHOLD
 from .warehouse_client import WarehouseClient
 from .storage_client import StorageClient
 from .db import SCHEMA_MAP, TABLE_LEADS, TABLE_DISCOVERED_SOURCES
@@ -13,22 +11,12 @@ from .db import SCHEMA_MAP, TABLE_LEADS, TABLE_DISCOVERED_SOURCES
 logger = logging.getLogger(__name__)
 
 
-def fetch_leads_text(storage, month, format_id, elo_tier):
+def load_leads_text(storage, month, format_id, elo_tier):
     cache_name = storage.cache_path("leads", month, format_id, elo_tier, "txt")
     if storage.exists(cache_name):
         logger.debug("Cache hit: gs://%s/%s", storage.bucket_name, cache_name)
         return storage.download_text(cache_name)
-    for ext in [".txt", ".txt.gz"]:
-        url = f"{SMOGON_BASE}/{month}/leads/{format_id}-{elo_tier}{ext}"
-        try:
-            resp = requests.get(url, timeout=30)
-            if resp.status_code == 200:
-                raw = resp.content
-                text = gzip.decompress(raw).decode("utf-8") if ext == ".txt.gz" else raw.decode("utf-8")
-                storage.upload_text(text, cache_name)
-                return text
-        except requests.RequestException:
-            continue
+    logger.debug("Not found in GCS: gs://%s/%s", storage.bucket_name, cache_name)
     return None
 
 
@@ -84,7 +72,7 @@ def run(format_filter=None):
     logger.info("Ingesting %d leads files", len(todo))
     accum = []
     for month, fmt, elo in tqdm(todo, desc="Leads"):
-        text = fetch_leads_text(storage, month, fmt, elo)
+        text = load_leads_text(storage, month, fmt, elo)
         if not text:
             continue
         parsed = parse_leads_table(text)
