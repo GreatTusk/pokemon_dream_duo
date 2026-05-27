@@ -1,5 +1,4 @@
 import os
-from pathlib import Path
 
 
 SMOGON_BASE = "https://www.smogon.com/stats"
@@ -61,6 +60,7 @@ REPLAY_PAGES = 10
 MIN_ELO_REPLAY = 1500
 
 BATCH_SIZE = 500
+FLUSH_THRESHOLD = 10_000
 
 PROJECT_ID = os.environ.get("PROJECT_ID", "")
 REGION = os.environ.get("REGION", "us-central1")

@@ -5,7 +5,7 @@ import gzip
 import argparse
 from tqdm import tqdm
 
-from .config import SMOGON_BASE
+from .config import SMOGON_BASE, FLUSH_THRESHOLD
 from .warehouse_client import WarehouseClient
 from .storage_client import StorageClient
 from .db import SCHEMA_MAP, TABLE_METAGAME, TABLE_DISCOVERED_SOURCES
@@ -63,7 +63,7 @@ def run(format_filter=None):
         logger.info("All metagame data already ingested")
         return
     logger.info("Ingesting %d metagame files", len(todo))
-    all_rows = []
+    accum = []
     for month, fmt, elo in tqdm(todo, desc="Metagame"):
         text = fetch_metagame_text(storage, month, fmt, elo)
         if not text:
@@ -72,10 +72,13 @@ def run(format_filter=None):
         if not parsed:
             continue
         for playstyle, pct in parsed:
-            all_rows.append({"month": month, "format_id": fmt, "elo_tier": elo,
-                             "playstyle": playstyle, "usage_pct": pct})
-    if all_rows:
-        wh.write_rows(TABLE_METAGAME, SCHEMA_MAP[TABLE_METAGAME], all_rows)
+            accum.append({"month": month, "format_id": fmt, "elo_tier": elo,
+                          "playstyle": playstyle, "usage_pct": pct})
+        if len(accum) >= FLUSH_THRESHOLD:
+            wh.write_rows(TABLE_METAGAME, SCHEMA_MAP[TABLE_METAGAME], accum)
+            accum = []
+    if accum:
+        wh.write_rows(TABLE_METAGAME, SCHEMA_MAP[TABLE_METAGAME], accum)
     logger.info("Metagame ingestion complete")
 
 

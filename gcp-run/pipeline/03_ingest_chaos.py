@@ -6,7 +6,7 @@ import gzip
 import argparse
 from tqdm import tqdm
 
-from .config import SMOGON_BASE
+from .config import SMOGON_BASE, FLUSH_THRESHOLD
 from .warehouse_client import WarehouseClient
 from .storage_client import StorageClient
 from .db import (
@@ -155,6 +155,10 @@ def run(format_filter=None):
             continue
         for tname in CHAOS_TABLES:
             accum[tname].extend(result[tname])
+        for tname in CHAOS_TABLES:
+            if len(accum[tname]) >= FLUSH_THRESHOLD:
+                wh.write_rows(tname, SCHEMA_MAP[tname], accum[tname])
+                accum[tname] = []
 
     for tname in CHAOS_TABLES:
         if accum[tname]:

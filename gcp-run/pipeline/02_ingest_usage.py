@@ -5,7 +5,7 @@ import argparse
 import gzip
 from tqdm import tqdm
 
-from .config import SMOGON_BASE
+from .config import SMOGON_BASE, FLUSH_THRESHOLD
 from .warehouse_client import WarehouseClient
 from .storage_client import StorageClient
 from .db import SCHEMA_MAP, TABLE_USAGE_STATS, TABLE_DISCOVERED_SOURCES
@@ -103,7 +103,7 @@ def run(format_filter=None):
         logger.info("All usage data already ingested")
         return
     logger.info("Ingesting %d usage stats files", len(todo))
-    all_rows = []
+    accum = []
     for month, fmt, elo in tqdm(todo, desc="Usage stats"):
         text = fetch_usage_text(storage, month, fmt, elo)
         if not text:
@@ -113,14 +113,17 @@ def run(format_filter=None):
         if not data_lines:
             continue
         for rank, pokemon, usage_pct, raw_count, raw_pct, real_count, real_pct in data_lines:
-            all_rows.append({
+            accum.append({
                 "month": month, "format_id": fmt, "elo_tier": elo,
                 "pokemon": pokemon, "rank": rank,
                 "usage_pct": usage_pct, "raw_count": raw_count,
                 "raw_pct": raw_pct, "real_count": real_count, "real_pct": real_pct,
             })
-    if all_rows:
-        wh.write_rows(TABLE_USAGE_STATS, SCHEMA_MAP[TABLE_USAGE_STATS], all_rows)
+        if len(accum) >= FLUSH_THRESHOLD:
+            wh.write_rows(TABLE_USAGE_STATS, SCHEMA_MAP[TABLE_USAGE_STATS], accum)
+            accum = []
+    if accum:
+        wh.write_rows(TABLE_USAGE_STATS, SCHEMA_MAP[TABLE_USAGE_STATS], accum)
     logger.info("Usage ingestion complete")
 
 
