@@ -3,6 +3,7 @@
 # Usage: bash setup_resources.sh [gen9ou|gen9uu|...]
 
 set -euo pipefail
+export COLUMNS=200
 
 PROJECT_ID="${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null)}"
 REGION="${REGION:-us-east1}"
@@ -84,18 +85,13 @@ gsutil iam ch \
     "serviceAccount:${SERVICE_ACCOUNT}:roles/storage.objectAdmin" \
     "gs://${BUCKET_NAME}"
 
-# 8. Grant dataset-level BigQuery dataEditor
-bq add-iam-policy-binding \
+# 8. Grant dataset-level permissions via project IAM (dataset-level IAM requires allowlisting)
+echo ">>> Granting BigQuery dataEditor role at project level..."
+gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
     --member="serviceAccount:${SERVICE_ACCOUNT}" \
     --role="roles/bigquery.dataEditor" \
-    "${PROJECT_ID}:${BQ_DATASET}"
-
-echo ""
-echo "=== Infrastructure Ready ==="
-echo "Service Account:  ${SERVICE_ACCOUNT}"
-echo "Bucket:           gs://${BUCKET_NAME}"
-echo "BigQuery Dataset: ${PROJECT_ID}:${BQ_DATASET}"
-echo ""
+    --condition=None \
+    --quiet
 
 # 9. Build and push container image
 echo ">>> Building and pushing container image..."
